@@ -94,6 +94,72 @@ app.get('/', (req, res) => {
   res.send('✅ Agencee Backend API attivo');
 });
 
+const axios = require('axios');
+const ical = require('ical');
+
+// Funzione per scaricare e leggere i calendari dei collaboratori
+async function fetchCalendar(url) {
+  try {
+    const httpsUrl = url.replace('webcal://', 'https://'); // se serve
+    console.log(`📥 Scaricamento calendario: ${httpsUrl}`);
+
+    const response = await axios.get(httpsUrl);
+    const data = ical.parseICS(response.data);
+
+    const events = Object.values(data).filter(event => event.type === 'VEVENT');
+    console.log(`✅ Eventi trovati nel calendario: ${events.length}`);
+    
+    return events;
+  } catch (error) {
+    console.error('❌ Errore fetch calendario:', error.message);
+    return [];
+  }
+}
+
+// Endpoint per verificare la disponibilità dei collaboratori
+app.get('/availability', async (req, res) => {
+  const { date, time } = req.query;
+
+  if (!date || !time) {
+    return res.status(400).json({ error: 'Parametri "date" e "time" obbligatori!' });
+  }
+
+  const requestedDateTime = new Date(`${date}T${time}:00`);
+  const slotDurationMinutes = 30;
+  const slotEndTime = new Date(requestedDateTime.getTime() + slotDurationMinutes * 60000);
+
+  const collaborators = readJsonFile(collaboratorsFile);
+  const availableCollaborators = [];
+
+  // Ciclo su tutti i collaboratori
+  for (const collaborator of collaborators) {
+    const events = await fetchCalendar(collaborator.calendarUrl);
+
+    // Verifica se è libero
+    const isBusy = events.some(event => {
+      const start = new Date(event.start);
+      const end = new Date(event.end);
+
+      return (
+        (requestedDateTime >= start && requestedDateTime < end) ||
+        (slotEndTime > start && slotEndTime <= end)
+      );
+    });
+
+    if (!isBusy) {
+      availableCollaborators.push(collaborator.name);
+    }
+  }
+
+  console.log(`🔎 Disponibilità per ${date} ${time}:`, availableCollaborators);
+
+  res.json({
+    date,
+    time,
+    availableCollaborators
+  });
+});
+
 app.listen(port, () => {
   console.log(`✅ Admin Panel Backend attivo su http://localhost:${port}`);
 });
