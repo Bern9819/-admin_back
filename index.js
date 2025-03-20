@@ -4,7 +4,7 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 
 const app = express();
-const port = 3000;
+const port = process.env.PORT || 3000; // ✅ Usa la porta di Render o locale
 
 app.use(cors());
 app.use(bodyParser.json());
@@ -87,6 +87,11 @@ app.delete('/events/:id', (req, res) => {
   events = events.filter(e => e.id !== id);
   writeJsonFile(eventsFile, events);
   res.json({ message: 'Evento rimosso' });
+});
+
+// Default route (opzionale)
+app.get('/', (req, res) => {
+  res.send('✅ Agencee Backend API attivo');
 });
 
 app.listen(port, () => {
